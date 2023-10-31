@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Raspberry Pi Sensor Data</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body>
+    <div id="chart"></div>
+    <script>
+        var plotlyDiv = document.getElementById('chart');
+        var timeData = [];
+        var distanceData = [];
+        var speedData = [];
+
+        function updateChart() {
+            Plotly.newPlot(plotlyDiv, [{
+                x: timeData,
+                y: distanceData,
+                name: 'Distance (mm)',
+                type: 'scatter'
+            }, {
+                x: timeData,
+                y: speedData,
+                name: 'Speed (mm/s)',
+                type: 'scatter'
+            }], {
+                xaxis: { title: 'Time (ms)' },
+                yaxis: { title: 'Values' }
+            });
+        }
+
+        function fetchData() {
+            fetch('/data')
+                .then(response => response.text())
+                .then(data => {
+                    var lines = data.split('\n');
+                    timeData = [];
+                    distanceData = [];
+                    speedData = [];
+
+                    // 去除前五个点
+                    for (var i = 5; i < lines.length; i++) {
+                        var parts = lines[i].split(',');
+                        if (parts.length === 3) {
+                            timeData.push(parseInt(parts[0]));
+                            distanceData.push(parseFloat(parts[1]));
+                            speedData.push(parseFloat(parts[2]));
+                        }
+                    }
+
+                    updateChart();
+                });
+        }
+
+        fetchData();
+        setInterval(fetchData, 1000);
+    </script>
+</body>
+</html>
