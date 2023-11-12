@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-time CPR Data</title>
+    <script src="https://cdn.socket.io/3.0.4/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        #gauge-container {
+            position: relative;
+            width: 400px;
+            height: 200px;
+        }
+        canvas {
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+    <h1>Real-time CPR Data</h1>
+    <div id="gauge-container">
+        <canvas id="gauge"></canvas>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var socket = io.connect('http://' + document.domain + ':' + location.port);
+            var canvas = document.getElementById('gauge');
+
+            socket.on('update_data', function(data) {
+                var latestData = data[data.length - 1];
+                if (latestData.compression_per_minute) {
+                    drawGauge(canvas, latestData.compression_per_minute);
+                }
+            });
+
+            function drawGauge(canvas, value) {
+                var ctx = canvas.getContext('2d');
+                var centerX = canvas.width / 2;
+                var centerY = canvas.height;
+                var radius = 150;
+                var startAngle = Math.PI;
+                var endAngle = 2 * Math.PI;
+
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                // 绘制圆弧
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, radius, startAngle, endAngle);
+                ctx.lineWidth = 20;
+                ctx.strokeStyle = 'grey';
+                ctx.stroke();
+
+                // 绘制指针
+                var pointerAngle = startAngle + (value / 220) * Math.PI;
+                var pointerX = centerX + (radius - 20) * Math.cos(pointerAngle);
+                var pointerY = centerY + (radius - 20) * Math.sin(pointerAngle);
+                ctx.beginPath();
+                ctx.moveTo(centerX, centerY);
+                ctx.lineTo(pointerX, pointerY);
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = 'red';
+                ctx.stroke();
+            }
+        });
+    </script>
+</body>
+</html>

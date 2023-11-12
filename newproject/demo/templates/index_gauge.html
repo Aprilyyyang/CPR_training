@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-time CPR Data</title>
+    <script src="https://cdn.socket.io/3.0.4/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        #thermometer-container {
+            width: 100px;
+            height: 200px;
+            background-color: #f0f0f0;
+            position: relative;
+            overflow: hidden;
+            left: 400px; /* Adjust this value to move the thermometer to the right */
+            top: 20px;
+        }
+
+        #thermometer {
+            width: 100px;
+            background-color: #3498db;
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            transition: height 0.5s ease-out;
+        }
+
+        #thermometer-scale {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 20px; /* Adjust this value to set the width of the scale */
+            height: 100%;
+            background-color: #ffffff; /* Adjust this value to set the background color of the scale */
+            display: flex;
+            flex-direction: column-reverse; /* Reverse the order of items to have 100 at the top */
+            align-items: center;
+            justify-content: space-between;
+            font-size: 8px;
+            color: #333; /* Adjust this value to set the text color */
+            padding: 5px;
+        }
+
+        #gauge-container {
+            position: relative;
+            width: 300px;
+            height: 300px;
+            left: 240px; /* 向右移动 */
+        }
+    </style>
+</head>
+<body>
+    <h1>Real-time CPR Data</h1>
+    <div style="width: 800px; height: 400px;">
+        <canvas id="cprChart" width="800" height="400"></canvas>
+    </div>
+    <div id="thermometer-container">
+        <div id="thermometer"></div>
+        <div id="thermometer-scale">
+            <span> </span>
+            <span>20</span>
+            <span>40</span>
+            <span>60</span>
+            <span>80</span>
+            <span>100</span>
+        </div>    
+    </div>
+    <div id="gauge-container" style="position: relative; width: 300px; height: 300px;">
+        <canvas id="gauge" width="400" height="200"></canvas>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var socket = io.connect('http://' + document.domain + ':' + location.port);
+
+            var ctx = document.getElementById('cprChart').getContext('2d');
+            var cprChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Distance',
+                        borderColor: 'rgb(75, 192, 192)',
+                        data: [],
+                        fill: false,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+
+            // Thermometer-related variables
+            var thermometerContainer = document.getElementById('thermometer-container');
+            var thermometer = document.getElementById('thermometer');
+            var canvas = document.getElementById('gauge');
+           
+
+            socket.on('update_data', function(data) {
+                console.log('Received data:', data);
+
+                // Check if data is an array before using map
+                if (Array.isArray(data)) {
+                    // Update chart data
+                    cprChart.data.labels = data.map(item => item.timestamp);
+                    cprChart.data.datasets[0].data = data.map(item => item.distance);
+
+                    // Update the chart
+                    cprChart.update();
+
+                    // Update thermometer position based on distance
+                    var latestDistance = data[data.length - 1].distance;
+                    updateThermometer(latestDistance);
+
+                    // 获取 compression_per_minute 的最新值
+                    var compression = data[data.length - 1].compression_per_minute;
+
+                    console.log('Compression per minute:', compression);
+                    
+                    // 更新仪表盘
+                    drawGauge(canvas, compression);
+                } else {
+                    console.error('Invalid data format:', data);
+                }
+            });
+
+            // Function to update thermometer position based on distance
+            function updateThermometer(distance) {
+                // Calculate percentage of distance between 20 and 100
+                var percentage = Math.min(100, Math.max(0, (distance - 20) / (100 - 20))) * 100;
+
+                // Update thermometer position
+                thermometer.style.height = percentage + '%';
+            }
+
+
+            function drawGauge(canvas, value) {
+                
+                var ctx = canvas.getContext('2d');
+                var centerX = canvas.width / 2;
+                var centerY = canvas.height;
+                var radius = 150;
+                var startAngle = Math.PI;
+                var endAngle = 2 * Math.PI;
+
+                // 清除之前的绘制
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                // 绘制灰色圆弧 (0-100 和 120-220)
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, radius, startAngle, endAngle);
+                ctx.lineWidth = 20;
+                ctx.strokeStyle = 'grey';
+                ctx.stroke();
+
+                // 绘制绿色圆弧 (100-120)
+                var greenStart = Math.PI + (100 / 220) * Math.PI; // 计算开始角度
+                var greenEnd = Math.PI + (120 / 220) * Math.PI;   // 计算结束角度
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, radius, greenStart, greenEnd);
+                ctx.lineWidth = 20;
+                ctx.strokeStyle = 'green';
+                ctx.stroke();
+
+                // 添加刻度和数值
+                ctx.fillStyle = 'black';
+                ctx.font = '15px Arial';
+                for (let i = 0; i <= 220; i += 20) {
+                    let angle = startAngle + (i / 220) * Math.PI;
+                    let x = centerX + radius * Math.cos(angle);
+                    let y = centerY + radius * Math.sin(angle);
+                    ctx.fillText(i, x - 5, y + 5);
+                }
+
+                // 绘制指针
+                var pointerAngle = startAngle + (value / 220) * Math.PI;
+                var pointerX = centerX + (radius - 20) * Math.cos(pointerAngle);
+                var pointerY = centerY + (radius - 20) * Math.sin(pointerAngle);
+                ctx.beginPath();
+                ctx.moveTo(centerX, centerY);
+                ctx.lineTo(pointerX, pointerY);
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = 'red';
+                ctx.stroke();
+            }
+
+
+        });
+    </script>
+</body>
+</html>
